@@ -184,7 +184,7 @@ starting_lineup <- league_data %>%
 
 starter <- dplyr::tibble(
   "Position" = starting_lineup$Position,
-  "Starter" = c(2, 3, 4, 1, 1, 2, 2, 3, 3, 2)
+  "Starter" = c(2, 2, 4, 1, 1, 2, 2, 3, 3, 2)
 )
 
 rostered <- starting_lineup %>%
