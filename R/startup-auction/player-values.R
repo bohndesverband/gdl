@@ -2,11 +2,9 @@ library(tidyverse)
 
 # run ../positional-value/documentation.Rmd
 
-auction_budget <- 500
+auction_budget <- 1000
 
 player_values <- fpts_ranks %>%
-  # führe WR und TE zusammen
-  dplyr::mutate(position = ifelse(position %in% c("WR", "TE"), "WR+TE", position)) %>%
   dplyr::group_by(position) %>%
   dplyr::arrange(desc(avg)) %>%
   dplyr::mutate(
@@ -41,4 +39,4 @@ player_values <- fpts_ranks %>%
   ) %>%
   dplyr::select(id, name, position, team, posRank, avg, vorp, volr, price)
 
-write.csv(player_values, "data/player-prices.csv", row.names = FALSE)
+write.csv(player_values, "R/startup-auction/player-prices.csv", row.names = FALSE)
