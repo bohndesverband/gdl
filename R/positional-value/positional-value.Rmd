@@ -1,0 +1,285 @@
+---
+title: "Positional Value GDL"
+output: html_document
+knit: (function(inputFile, encoding) {
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "./") })
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(ffscrapr)
+library(ggplot2)
+library(gt)
+
+current_year <- 2023
+
+league_data <- jsonlite::read_json(paste0("https://www45.myfantasyleague.com/", current_year, "/export?TYPE=league&L=74675&JSON=1"))
+```
+
+## Positional Value
+
+Der Wert der einzelnen Position ergibt sich aus den Scoring Regeln und den Starting Lineup Voraussetzungen. 
+
+### Scoring
+
+Um das Scoring der einzelnen Positionen zu vergleichen betrachten wir den Punkteschnitt der Spieler pro Spiel. Das klammert Verletzungen von Spielern und eventuelle WK 18 Ausfälle aus und ist über die Jahre stabiler als die Gesamtpunkte.
+Basis sind die Ergebnisse von 2018-2022, wobei die Leistung von 2022 doppelt gewertet ist um der letzten Leistung mehr Bedeutung zu geben.
+
+
+```{r echo=FALSE, fig.height=15, fig.width=20, message=FALSE, warning=FALSE, paged.print=FALSE }
+
+source("positional-value.R", local = knitr::knit_global())
+
+# charts ----
+chart_defaults <- list(
+  ggplot2::geom_line(size = 1),
+  ggplot2::scale_color_brewer(palette = "Set3"),
+  ggplot2::theme(
+    panel.background = element_rect(fill = "#2c3e50"),
+    panel.grid = element_line(color = "#7f8c8d"),
+    legend.position = "none"
+  )
+)
+
+## position comparisons ----
+plot_data <- fpts_ranks %>% 
+  dplyr::filter(
+    position %in% c("PK", "PN", "TE") & posRank <= 24 |
+    position %in% c("QB") & posRank <= 36 |
+    position %in% c("DT", "CB", "S") & posRank <= 48 |
+    position %in% c("RB", "DE", "LB", "WR") & posRank <= 72
+  )
+
+### pos rank ---
+ggplot2::ggplot(plot_data, aes(x = posRank, y = avg, color = position, label = position)) +
+  chart_defaults +
+  ggplot2::geom_text(aes(label = ifelse(posRank == 1, as.character(position), "")), hjust = 0, vjust = 0, size = 10) +
+  ggplot2::labs(
+    title = "Fpts / Spiel 2022 nach Positionen",
+    x = "Positions Rang",
+    y = "Fpts/Spiel"
+  )
+
+```
+
+Die Top QBs erzielen mit Abstand die meisten Punkte pro Spiel, was ein Anliegen des mPPR Formats ist. Der durchshcnittliche QB 12 der letzten 5 Jahre befindet sich in etwas auf dem Level wie RB und WR 1. Werfen wir einen Blick in die Prozentuale Verteilung der Punkte in den einzelnen Positionen sehen wir das Leistungsgefälle innerhalb einer Positionsgruppe. Die TEs haben hier beispielsweise 2022 das größte Gefälle. Der TE 7 hat nur 50% der Fantasy Punkte pro Spiel erzielt wie der TE 1.
+
+```{r echo=FALSE, fig.height=15, fig.width=20, message=FALSE, warning=FALSE, paged.print=FALSE}
+### posFptsPerc ----
+ggplot2::ggplot(plot_data, aes(x = posRank, y = posFptsPerc, color = position, label = position)) +
+  ggplot2::geom_line() +
+  geom_text(aes(label = ifelse(posRank == 12, as.character(position), "")), hjust = 0, vjust = 0, size = 10) +
+  chart_defaults +
+  ggplot2::labs(
+    title = "Prozentualer Abfall der Fpts / Spiel",
+    x = "Positions Rang",
+    y = "Prozent der Fpts / Spiel"
+  )
+```
+
+```{r echo=FALSE}
+plot_data %>%
+  dplyr::select(position, avg, posRank, posFptsPerc) %>%
+  dplyr::mutate(
+    avg = round(avg, 1),
+    posFptsPerc = round(posFptsPerc, 2) * 100
+  ) %>% 
+  tidyr::pivot_wider(names_from = c("position"), values_from = c("avg", "posFptsPerc")) %>% 
+  dplyr::select(posRank, tidyr::ends_with("QB"), tidyr::ends_with("RB"), tidyr::ends_with("WR"), tidyr::ends_with("TE"), tidyr::ends_with("DT"), tidyr::ends_with("DE"), tidyr::ends_with("LB"), tidyr::ends_with("CB"), tidyr::ends_with("S"), tidyr::ends_with("PK")) %>% 
+  gt::gt() %>%
+  gt::tab_spanner(
+    label = "QB",
+    columns = tidyr::ends_with("QB")
+  ) %>%
+  gt::tab_spanner(
+    label = "RB",
+    columns = tidyr::ends_with("RB")
+  ) %>%
+  gt::tab_spanner(
+    label = "WR",
+    columns = tidyr::ends_with("WR")
+  ) %>%
+  gt::tab_spanner(
+    label = "TE",
+    columns = tidyr::ends_with("TE")
+  ) %>%
+  gt::tab_spanner(
+    label = "DT",
+    columns = tidyr::ends_with("DT")
+  ) %>%
+  gt::tab_spanner(
+    label = "DE",
+    columns = tidyr::ends_with("DE")
+  ) %>%
+  gt::tab_spanner(
+    label = "LB",
+    columns = tidyr::ends_with("LB")
+  ) %>%
+  gt::tab_spanner(
+    label = "CB",
+    columns = tidyr::ends_with("CB")
+  ) %>%
+  gt::tab_spanner(
+    label = "S",
+    columns = tidyr::ends_with("S")
+  ) %>%
+  gt::tab_spanner(
+    label = "PK",
+    columns = tidyr::ends_with("PK")
+  ) %>%
+  gt::cols_label(
+    posRank = "#",
+    avg_QB = "Pts/G",
+    avg_RB = "Pts/G",
+    avg_WR = "Pts/G",
+    avg_TE = "Pts/G",
+    avg_DT = "Pts/G",
+    avg_DE = "Pts/G",
+    avg_LB = "Pts/G",
+    avg_CB = "Pts/G",
+    avg_S = "Pts/G",
+    avg_PK = "Pts/G",
+    posFptsPerc_QB = "%",
+    posFptsPerc_RB = "%",
+    posFptsPerc_WR = "%",
+    posFptsPerc_TE = "%",
+    posFptsPerc_DT = "%",
+    posFptsPerc_DE = "%",
+    posFptsPerc_LB = "%",
+    posFptsPerc_CB = "%",
+    posFptsPerc_S = "%",
+    posFptsPerc_PK = "%",
+  ) %>% 
+  gt::sub_missing(
+    missing_text = "---"
+  )
+```
+
+### Starting Lineup
+```{r include=FALSE}
+total_starter <- league_data %>%
+  purrr::pluck("league", "starters", "count")
+
+idp_starter <- league_data %>%
+  purrr::pluck("league", "starters", "idp_starters")
+```
+
+In der Liga starten insgesamt `r total_starter` Spieler, davon `r idp_starter` IDP. Bezieht man die Charts von oben mit ein, ergeben sich daraus diese "optimalen Roster".
+
+```{r starter requirements, echo=FALSE, message=FALSE, warning=FALSE}
+starting_lineup <- league_data %>%
+  purrr::pluck("league", "starters", "position") %>%
+  dplyr::tibble() %>%
+  tidyr::unnest_wider(1) %>%
+  # manuelle anpassung der lineups, solange nicht die richtige liga id verfügbar ist. kann dann gelöscht werden
+  dplyr::mutate(
+    limit = ifelse(name == "QB", "1-2", limit)
+  ) %>% 
+  dplyr::rename(
+    Position = name,
+    Limit = limit
+  )
+
+starter <- dplyr::tibble(
+  "Position" = starting_lineup$Position,
+  "Starter" = c(2, 3, 4, 1, 1, 2, 2, 3, 3, 2)
+)
+
+rostered <- starting_lineup %>%
+  dplyr::left_join(starter, by = "Position") %>%
+  dplyr::mutate(
+    "Started" = Starter * 16,
+    "nfl_starter" = Started / 32,
+    "Rostered" = ifelse(nfl_starter < 1, ceiling(Started * (1 + nfl_starter)), ceiling(Started * nfl_starter)),
+    "nfl_rostered" = Rostered / 32,
+    "Roster" = ceiling(Rostered / 16),
+    Roster = dplyr::case_when(
+      # optimiere roster
+      Position %in% c("PK", "PN") ~ 1,
+      Position %in% c("RB", "WR+TE", "DT", "DE", "LB", "CB") ~ Roster + 1,
+      TRUE ~ Roster
+    )
+  )
+
+rostered %>%
+  gt::gt() %>%
+  gt::tab_spanner("Team Avg", c(Starter, Roster)) %>%
+  gt::tab_spanner("Liga", c(Started, Rostered)) %>% 
+  gt::tab_spanner("Per NFL Team", c(nfl_starter, nfl_rostered)) %>% 
+  gt::grand_summary_rows(
+    fns = list(Total = ~ sum(.)),
+    columns = vars(Starter, Roster, Started, Rostered, nfl_starter, nfl_rostered)
+  ) %>% 
+  gt::cols_label(
+    nfl_starter = "Started",
+    nfl_rostered = "Rostered"
+  )
+```
+
+## Value Bestimmung
+
+Führen wir die bisherigen Daten zusammen. Der Positional Value per Starter ist der Anteil der Fantasy Punkte eines durchschnittlichen Starters an den Fantasy Punkten des durchschnittlichen Teams.
+
+```{r echo=FALSE}
+fpts_ranks_with_lineup <- fpts_ranks %>%
+  dplyr::group_by(position) %>%
+  dplyr::arrange(desc(avg)) %>%
+  dplyr::mutate(
+    posRank = dplyr::row_number()
+  ) %>%
+  dplyr::left_join(rostered %>% select(-Limit), by = c("position" = "Position")) %>%
+  dplyr::filter(posRank <= Started)
+
+
+rostered_avg <- fpts_ranks_with_lineup %>%
+  dplyr::mutate(startedAvg = round(mean(avg), 2)) %>%
+  dplyr::select(position, Starter, startedAvg) %>%
+  unique() %>%
+  dplyr::ungroup() %>%
+  dplyr::mutate(
+    avgStarterPoints = round(startedAvg * Starter, 2),
+    totalPoints = sum(avgStarterPoints),
+    posValuePerStarter = round(startedAvg / sum(avgStarterPoints), 3) * 100,
+    posValueTotal = round(posValuePerStarter * Starter, 3)
+  ) %>%
+  dplyr::arrange(desc(posValuePerStarter))
+
+rostered_avg %>%
+  dplyr::select(-totalPoints) %>% 
+  gt::gt() %>% 
+  gt::tab_spanner(
+    label = "Avg. Fpts",
+    columns = c(startedAvg, avgStarterPoints)
+  ) %>% 
+  gt::tab_spanner(
+    label = "Value",
+    columns = c(posValuePerStarter, posValueTotal)
+  ) %>% 
+  gt::cols_label(
+    position = "Pos",
+    startedAvg = "per Starter",
+    avgStarterPoints = "Total",
+    posValuePerStarter = "per Starter",
+    posValueTotal = "Total"
+  ) %>% 
+  gt::grand_summary_rows(
+    fns = list(Total = ~ sum(.)),
+    columns = c(avgStarterPoints, posValueTotal)
+  )
+```
+```{r echo=FALSE}
+ggplot2::ggplot(rostered_avg, aes(x = reorder(position, desc(posValuePerStarter)), y = posValuePerStarter, fill = position)) +
+  ggplot2::geom_col() +
+  ggplot2::scale_fill_brewer(palette = "Set3") +
+  ggplot2::theme(
+    legend.position = "none"
+  ) +
+  ggplot2::labs(
+    title = "Positional Value für einen durchschnittlichen Starter",
+    x = "Position",
+    y = "Value"
+  )
+```
+
