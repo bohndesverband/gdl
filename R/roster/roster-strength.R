@@ -91,11 +91,11 @@ data %>%
 # by position
 data %>%
   dplyr::group_by(pos) %>%
-  dplyr::arrange(pos, dplyr::desc(pp_diff)) %>%
+  dplyr::arrange(pos, dplyr::desc(avg_points_for)) %>%
   dplyr::mutate(
     pp_diff = ifelse(pp_diff > 0, paste0("+", pp_diff), pp_diff)
   ) %>%
   gt_basics() %>%
   gtExtras::gt_merge_stack(col1 = franchise_name, col2 = franchise_info) %>%
-  gt::cols_hide(franchise_info) %>%
+  gt::cols_hide(franchise_info)
   gt::gtsave("charts/strength_by_pos.png", expand = 10)
