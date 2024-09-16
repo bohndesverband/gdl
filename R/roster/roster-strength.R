@@ -97,5 +97,5 @@ data %>%
   ) %>%
   gt_basics() %>%
   gtExtras::gt_merge_stack(col1 = franchise_name, col2 = franchise_info) %>%
-  gt::cols_hide(franchise_info)
+  gt::cols_hide(franchise_info) %>%
   gt::gtsave("charts/strength_by_pos.png", expand = 10)
