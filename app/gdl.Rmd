@@ -1,0 +1,237 @@
+---
+title: "GDL 1"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    vertical_layout: scroll
+    theme:
+      version: 4
+      bg: "#2c3e50"
+      fg: "#ffffff" 
+      primary: "#8e44ad"
+      navbar-bg: "#34495e"
+      base_font: 
+        google: Open Sans
+      heading_font:
+        google: Sen
+      code_font:
+        google: 
+          # arguments to sass::font_google() 
+          family: JetBrains Mono
+          local: false
+runtime: shiny
+---
+
+```{css}
+.form-group { display: hidden; }
+
+.shiny-html-output:has(#player-salaries.active) .form-group:has(> #selectPosition) {
+  display: block;
+}
+```
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(tidyverse)
+library(ffscrapr)
+library(gt)
+library(gtExtras)
+library(formattable)
+library(DT)
+library(shinyWidgets)
+library(emoji)
+```
+
+```{r global, message=TRUE, warning=TRUE, include=FALSE}
+source("R/base-data.R")
+
+color_red <- "#c0392b"
+color_green <- "#16a085"
+```
+
+# Sidebar {.sidebar}
+
+```{r inputs, echo=FALSE, message=FALSE, warning=FALSE}
+shiny::sliderInput("selectYear", "Jahre", min = current_season, max = current_season + 4, value = c(current_season, current_season + 1), step = 1, sep = "")
+
+#sliderInput("selectPosition", "Position", min = 1, max = 7, value = c(1, 7), sep = "")
+
+shinyWidgets::pickerInput(
+  "selectTeams",
+  "GDL Teams",
+  choices = setNames(franchises$franchise_id, franchises$franchise_name),
+  selected = franchises$franchise_id,
+  options = list("actions-box" = TRUE),
+  multiple = TRUE
+)
+
+shiny::selectizeInput(
+  "selectSingleTeam",
+  "GDL Teams",
+  choices = setNames(franchises$franchise_id, franchises$franchise_name),
+  selected = franchises$franchise_id[1]
+)
+
+shinyWidgets::pickerInput(
+  "selectPositions",
+  "Position",
+  choices = positions,
+  selected = positions,
+  options = list("actions-box" = TRUE),
+  multiple = TRUE
+)
+```
+
+# Überblick
+
+# Roster Stärken {data-navmenu="Roster"}
+
+## Row
+### Roster Stärken nach Team
+```{r roster-strength-team, echo=FALSE, fig.height=6, message=FALSE, warning=FALSE}
+source("R/roster/roster-strength.R")
+
+gt::render_gt({
+  roster_strength %>% 
+    dplyr::filter(franchise_id == input$selectSingleTeam) %>% 
+    dplyr::group_by(franchise_name) %>%
+    dplyr::arrange(dplyr::desc(avg_points_for), dplyr::desc(pp_avg)) %>%
+    dplyr::mutate(
+      pp_diff = ifelse(pp_diff > 0, paste0("+", pp_diff), pp_diff),
+      franchise_name = paste0(franchise_name, " (", franchise_info, ")")
+    ) %>%
+    gt_basics() %>%
+    gt::cols_hide(c(franchise_id, franchise_info))
+})
+```
+
+## Row
+### Roster Stärken nach Position
+```{r roster-strength-position, echo=FALSE, fig.height=80, message=FALSE, warning=FALSE}
+source("R/roster/roster-strength.R")
+
+gt::render_gt({
+  roster_strength %>% 
+    dplyr::filter(pos %in% input$selectPositions) %>%
+    dplyr::group_by(pos) %>%
+    dplyr::arrange(pos, dplyr::desc(avg_points_for)) %>%
+    dplyr::mutate(
+      pp_diff = ifelse(pp_diff > 0, paste0("+", pp_diff), pp_diff)
+    ) %>%
+    gt_basics() %>%
+    gtExtras::gt_merge_stack(col1 = franchise_name, col2 = franchise_info) %>%
+    gt::cols_hide(c(franchise_id, franchise_info))
+})
+```
+
+
+# Salary Vorschau {data-navmenu="Roster"}
+## Row
+### Salary Vorschau
+
+```{r player-salary-outlook, echo=FALSE, fig.height=18, message=FALSE, warning=FALSE}
+
+source("R/players/position-ranks.R")
+source("R/players/player-salaries.R")
+
+gt::render_gt({
+  salary_outlook %>%
+    dplyr::filter(franchise_id == input$selectSingleTeam) %>% 
+    dplyr::group_by(category) %>%
+    dplyr::arrange(dplyr::desc(points)) %>%
+    dplyr::select(player_name, pos, team, points, pos_rank_ytd, contract_years, category, salary, holdout, salary_next_season, salary_ext, cut) %>%
+    dplyr::mutate(
+      holdout = ifelse(holdout == 1, emoji::emoji("red_circle"), ""),
+      holdout = ifelse(is.na(holdout), "", holdout)
+    ) %>%
+    gt::gt() %>%
+    gtExtras::gt_merge_stack(col1 = points, col2 = pos_rank_ytd) %>%
+    gt::tab_spanner(
+      "Kosten",
+      c(salary_next_season, salary_ext, cut)
+    ) %>%
+    gt::tab_spanner(
+      "Vertrag",
+      c(contract_years, salary)
+    ) %>%
+    gt::cols_merge(c(salary, holdout)) %>%
+    gt::cols_label(
+      player_name = "Spieler",
+      pos = "Pos",
+      team = "Team",
+      points = "PPG",
+      contract_years = emoji::emoji("clock5"),
+      salary = emoji::emoji("money_bag"),
+      salary_next_season = nflreadr::get_current_season(TRUE) + 1,
+      salary_ext = emoji::emoji("handshake"),
+      cut = emoji::emoji("scissors")
+    )
+})
+
+```
+
+# Spielergehälter {data-navmenu="Spieler"}
+## Row
+### Spielergehälter
+> SAPRA = Salary Above Position Rank Average
+
+```{r player-salaries, echo=FALSE, fig.height=18, message=FALSE, warning=FALSE}
+
+source("R/players/position-ranks.R")
+source("R/players/player-salaries.R")
+
+DT::renderDataTable({
+formattable::formattable(
+  roster_with_salary %>%
+    dplyr::filter(
+      pos %in% input$selectPositions
+    ) %>% 
+    dplyr::filter(
+      franchise_id %in% input$selectTeams
+    ) %>% 
+    dplyr::select(-franchise_name, -dplyr::ends_with("id")) %>% 
+    dplyr::rename(
+      "Spieler" = player_name,
+      "Pos" = pos,
+      "Team" = team,
+      "Alter" = age,
+      "PPG" = points,
+      "Rang" = pos_rank_avg,
+      "Gehalt" = salary,
+      "Vertrag" = contract_years,
+      "SAPRA" = closest_avg_diff,
+      "Status" = roster_status
+    ),
+  list(
+    Alter = formattable::color_tile(color_green, color_red),
+    PPG = formattable::color_tile(color_green, color_red),
+    Rang = formattable::color_tile(color_green, color_red),
+    Gehalt = formattable::color_tile(color_green, color_red),
+    Vertrag = formattable::color_tile(color_red, color_green),
+    SAPRA = formattable::color_tile(color_green, color_red)
+  )
+) %>%
+  formattable::as.datatable(escape = FALSE, rownames = FALSE, options = list(pageLength = 32, order = list(4, 'desc')))
+})
+
+```
+
+# Free Agent Klassen {data-navmenu="Spieler"}
+## Row
+### Free Agents
+
+```{r free-agent-classes, echo=FALSE, fig.height=6, message=FALSE, warning=FALSE}
+
+source("R/players/position-ranks.R")
+source("R/players/player-salaries.R")
+source("R/players/free-agents.R")
+
+DT::renderDataTable({
+  free_agents %>% 
+    dplyr::filter(
+      pos %in% input$selectPositions,
+        (fa_class >= input$selectYear[1] & fa_class <= input$selectYear[2])
+    )
+})
+
+```
