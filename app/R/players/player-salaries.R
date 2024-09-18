@@ -33,6 +33,12 @@ roster_with_salary <- rosters %>%
     by = "player_id"
   ) %>%
   dplyr::left_join(
+    pos_ranks_ytd %>%
+      dplyr::select(player_id, points, pos_rank_ytd, is_top_pos_player) %>%
+      dplyr::rename(points_ytd = points),
+    by = "player_id"
+  ) %>%
+  dplyr::left_join(
     ranking,
     by = "pos"
   ) %>%
@@ -46,18 +52,24 @@ roster_with_salary <- rosters %>%
       pos_rank_avg <= 72 ~ salary - top_64,
       TRUE ~ salary - below_64
     ),
-    points = round(points, 2)
+    contract_value = (points / salary) * points_ytd,
+    contract_value_pct_ovrl = contract_value / max(contract_value, na.rm = TRUE)
   ) %>%
-  dplyr::select(franchise_name, player_id, player_name, pos, team, age, points, pos_rank_avg, contract_years, salary, closest_avg_diff, roster_status, franchise_id)
+  dplyr::group_by(pos) %>%
+  dplyr::mutate(
+    contract_value_pct_pos = contract_value / max(contract_value, na.rm = TRUE),
+
+    # remove NA
+    across(c(points_ytd, points), ~ ifelse(is.na(.), 0, round(., 2))),
+    #across(c(pos_rank_ytd, pos_rank_avg), ~ ifelse(is.na(.), max(.) + 1, .)),
+    across(c(contract_value_pct_ovrl, contract_value_pct_pos), ~ ifelse(is.na(.), 0, .))
+  ) %>%
+  dplyr::ungroup() %>%
+  dplyr::select(franchise_name, player_id, player_name, pos, team, age, points, pos_rank_avg, contract_years, salary, contract_value_pct_ovrl, contract_value_pct_pos, roster_status, franchise_id, points_ytd, pos_rank_ytd, is_top_pos_player)
 
 # outlook
 salary_outlook <- roster_with_salary %>%
-  dplyr::select(franchise_id, franchise_name, player_id, player_name, pos, team, points, contract_years, salary) %>%
-  dplyr::left_join(
-    pos_ranks_ytd %>%
-      dplyr::select(player_id, pos_rank_ytd, is_top_pos_player),
-    by = "player_id"
-  ) %>%
+  dplyr::select(franchise_id, franchise_name, player_id, player_name, pos, team, points, contract_years, salary, pos_rank_ytd, is_top_pos_player) %>%
   dplyr::left_join(
     top_player_salary_avg,
     by = "pos"

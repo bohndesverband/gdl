@@ -40,6 +40,7 @@ library(formattable)
 library(DT)
 library(shinyWidgets)
 library(emoji)
+library(svglite)
 ```
 
 ```{r global, message=TRUE, warning=TRUE, include=FALSE}
@@ -52,6 +53,7 @@ color_green <- "#16a085"
 # Sidebar {.sidebar}
 
 ```{r inputs, echo=FALSE, message=FALSE, warning=FALSE}
+
 shiny::sliderInput("selectYear", "Jahre", min = current_season, max = current_season + 4, value = c(current_season, current_season + 1), step = 1, sep = "")
 
 #sliderInput("selectPosition", "Position", min = 1, max = 7, value = c(1, 7), sep = "")
@@ -80,6 +82,9 @@ shinyWidgets::pickerInput(
   options = list("actions-box" = TRUE),
   multiple = TRUE
 )
+
+shiny::sliderInput("selectContractYears", "Vertragsjahre", min = 1, max = 4, value = c(1, 4), step = 1, sep = "")
+
 ```
 
 # Überblick
@@ -129,14 +134,17 @@ gt::render_gt({
 ## Row
 ### Salary Vorschau
 
-```{r player-salary-outlook, echo=FALSE, fig.height=18, message=FALSE, warning=FALSE}
+```{r player-salary-outlook, echo=FALSE, fig.height=30, message=FALSE, warning=FALSE}
 
 source("R/players/position-ranks.R")
 source("R/players/player-salaries.R")
 
 gt::render_gt({
   salary_outlook %>%
-    dplyr::filter(franchise_id == input$selectSingleTeam) %>% 
+    dplyr::filter(
+      franchise_id == input$selectSingleTeam,
+      (contract_years >= input$selectContractYears[1] & contract_years <= input$selectContractYears[2])
+    ) %>% 
     dplyr::group_by(category) %>%
     dplyr::arrange(dplyr::desc(points)) %>%
     dplyr::select(player_name, pos, team, points, pos_rank_ytd, contract_years, category, salary, holdout, salary_next_season, salary_ext, cut) %>%
@@ -154,7 +162,7 @@ gt::render_gt({
       "Vertrag",
       c(contract_years, salary)
     ) %>%
-    gt::cols_merge(c(salary, holdout)) %>%
+    gt::cols_merge(c(player_name, holdout)) %>%
     gt::cols_label(
       player_name = "Spieler",
       pos = "Pos",
@@ -173,7 +181,6 @@ gt::render_gt({
 # Spielergehälter {data-navmenu="Spieler"}
 ## Row
 ### Spielergehälter
-> SAPRA = Salary Above Position Rank Average
 
 ```{r player-salaries, echo=FALSE, fig.height=18, message=FALSE, warning=FALSE}
 
@@ -184,34 +191,43 @@ DT::renderDataTable({
 formattable::formattable(
   roster_with_salary %>%
     dplyr::filter(
-      pos %in% input$selectPositions
+      pos %in% input$selectPositions,
+      franchise_id %in% input$selectTeams,
+      (contract_years >= input$selectContractYears[1] & contract_years <= input$selectContractYears[2])
     ) %>% 
-    dplyr::filter(
-      franchise_id %in% input$selectTeams
-    ) %>% 
-    dplyr::select(-franchise_name, -dplyr::ends_with("id")) %>% 
+    #dplyr::filter(
+    #) %>% 
+    dplyr::select(player_name, pos, team, age, points_ytd, pos_rank_ytd, points, pos_rank_avg, contract_years, salary, contract_value_pct_pos, contract_value_pct_ovrl, roster_status) %>%
     dplyr::rename(
       "Spieler" = player_name,
       "Pos" = pos,
       "Team" = team,
       "Alter" = age,
+      "FPts" = points_ytd,
+      "YTD Rang" = pos_rank_ytd,
       "PPG" = points,
-      "Rang" = pos_rank_avg,
+      "PPG Rang" = pos_rank_avg,
       "Gehalt" = salary,
       "Vertrag" = contract_years,
-      "SAPRA" = closest_avg_diff,
-      "Status" = roster_status
+      "Status" = roster_status,
+      "Vertragswert Pos" = contract_value_pct_pos,
+      "Vertragswert Ges" = contract_value_pct_ovrl
     ),
   list(
     Alter = formattable::color_tile(color_green, color_red),
-    PPG = formattable::color_tile(color_green, color_red),
-    Rang = formattable::color_tile(color_green, color_red),
+    FPts = formattable::color_tile(color_red, color_green),
+    "YTD Rang" = formattable::color_tile(color_green, color_red),
+    PPG = formattable::color_tile(color_red, color_green),
+    "PPG Rang" = formattable::color_tile(color_green, color_red),
     Gehalt = formattable::color_tile(color_green, color_red),
     Vertrag = formattable::color_tile(color_red, color_green),
-    SAPRA = formattable::color_tile(color_green, color_red)
+    "Vertragswert Pos" = formattable::percent,
+    "Vertragswert Ges" = formattable::percent,
+    "Vertragswert Pos" = formattable::color_tile(color_red, color_green),
+    "Vertragswert Ges" = formattable::color_tile(color_red, color_green)
   )
 ) %>%
-  formattable::as.datatable(escape = FALSE, rownames = FALSE, options = list(pageLength = 32, order = list(4, 'desc')))
+  formattable::as.datatable(escape = FALSE, rownames = FALSE, options = list(pageLength = 32, order = list(4, 'asc')))
 })
 
 ```
