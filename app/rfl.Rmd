@@ -1,0 +1,63 @@
+---
+title: "RFL"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    vertical_layout: scroll
+    theme:
+      version: 4
+      bg: "#100438"
+      fg: "#f7fcff" 
+      primary: "#380282"
+      base_font: 
+        google: Open Sans
+      heading_font:
+        google: Sen
+      code_font:
+        google: 
+          # arguments to sass::font_google() 
+          family: JetBrains Mono
+          local: false
+runtime: shiny
+---
+
+```{css}
+.shiny-html-output:has(#section-standing.active) .form-group:has(> #selectDraftRound) {
+  display: none;
+}
+```
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(tidyverse)
+
+#88eeee
+#ff2077
+#bb1166
+```
+
+# Sidebar {.sidebar}
+
+```{r inputs-draft-hit-rates, echo=FALSE, message=FALSE, warning=FALSE}
+sliderInput("selectSeason", "Saison", min = 2017, max = 2023, value = c(2017, 2023 - 2), sep = "")
+
+sliderInput("selectDraftRound", "Draftrunde", min = 1, max = 7, value = c(1, 7), sep = "")
+
+selectizeInput(
+  "selectTeam",
+  "RFL Team",
+  choices = c(1, 2, 3),
+  multiple= FALSE,
+  options = list(
+    placeholder = "Team wählen",
+    onInitialize = I('function() { this.setValue("RFL"); }')
+  )
+)
+```
+
+# Standing {data-navmenu="Teams"}
+
+## Row
+### Aktuelles Standing
+
+# Wins above Replacement {data-navmenu="Spieler"}

@@ -1,5 +1,5 @@
 # pos averages
-ranking <- pos_ranks_avg %>%
+top_x_salary_values <- pos_ranks_ytd %>%
   dplyr::left_join(
     rosters %>%
       dplyr::select(player_id, salary),
@@ -14,6 +14,30 @@ ranking <- pos_ranks_avg %>%
   tidyr::spread(pos_finish, top_x_avg_salary) %>%
   dplyr::select(pos, top_5, top_8, top_16, top_32, top_48, top_64, below_64)
 
+# tags
+tag_salaries <- rosters %>%
+  dplyr::select(pos, salary) %>%
+  dplyr::group_by(pos) %>%
+  dplyr::arrange(dplyr::desc(salary)) %>%
+  dplyr::mutate(
+    tender = dplyr::case_when(
+      dplyr::row_number() <= 5 ~ "gft",
+      dplyr::row_number() == 10 ~ "tender_1",
+      dplyr::row_number() == 20 ~ "tender_2",
+      dplyr::row_number() == 30 ~ "tender_3"
+    ),
+    top_player_salary = dplyr::case_when(
+      (pos %in% c("QB", "TE", "DT") & dplyr::row_number() <= 10) |
+        (pos %in% c("RB", "DE", "S", "CB") & dplyr::row_number() <= 15) |
+        (pos %in% c("WR", "LB") & dplyr::row_number() <= 20) ~ salary
+    )
+  ) %>%
+  dplyr::mutate(top_player_salary = round(mean(top_player_salary, na.rm = TRUE), 2)) %>%
+  dplyr::filter(!is.na(tender)) %>%
+  dplyr::group_by(pos, tender, top_player_salary) %>%
+  dplyr::summarise(salary = round(mean(salary), 2), .groups = "drop") %>%
+  tidyr::spread(tender, salary)
+
 top_player_salary_avg <- pos_ranks_ytd %>%
   dplyr::filter(is_top_pos_player == 1) %>%
   dplyr::left_join(
@@ -26,7 +50,6 @@ top_player_salary_avg <- pos_ranks_ytd %>%
 
 # rosters
 roster_with_salary <- rosters %>%
-  dplyr::select(-dplyr::starts_with("draft")) %>%
   dplyr::left_join(
     pos_ranks_avg %>%
       dplyr::select(player_id, points, pos_rank_avg),
@@ -39,7 +62,7 @@ roster_with_salary <- rosters %>%
     by = "player_id"
   ) %>%
   dplyr::left_join(
-    ranking,
+    top_x_salary_values,
     by = "pos"
   ) %>%
   dplyr::mutate(
@@ -65,27 +88,41 @@ roster_with_salary <- rosters %>%
     across(c(contract_value_pct_ovrl, contract_value_pct_pos), ~ ifelse(is.na(.), 0, .))
   ) %>%
   dplyr::ungroup() %>%
-  dplyr::select(franchise_name, player_id, player_name, pos, team, age, points, pos_rank_avg, contract_years, salary, contract_value_pct_ovrl, contract_value_pct_pos, roster_status, franchise_id, points_ytd, pos_rank_ytd, is_top_pos_player)
+  dplyr::select(franchise_name, player_id, player_name, pos, team, age, points, pos_rank_avg, contract_years, salary, contract_value_pct_ovrl, contract_value_pct_pos, roster_status, franchise_id, points_ytd, pos_rank_ytd, is_top_pos_player, drafted)
 
 # outlook
 salary_outlook <- roster_with_salary %>%
-  dplyr::select(franchise_id, franchise_name, player_id, player_name, pos, team, points, contract_years, salary, pos_rank_ytd, is_top_pos_player) %>%
   dplyr::left_join(
-    top_player_salary_avg,
+    tag_salaries,
     by = "pos"
   ) %>%
   dplyr::mutate(
+    category = ifelse(contract_years > 1 | roster_status == "TAXI_SQUAD" | grepl("BB", drafted) | drafted == "FCFS", "Mögliche Vertragsverlängerungen", "Auslaufende Verträge"),
     fa_class = nflreadr::get_current_season() + contract_years,
-    holdout = ifelse(contract_years > 1 & is_top_pos_player == 1 & salary < (top_player_salary / 2), 1, 0),
+    holdout = ifelse((contract_years > 1 | roster_status == "TAXI_SQUAD") & is_top_pos_player == 1 & salary < (top_player_salary / 2), 1, 0),
+    holdout = ifelse(is.na(holdout), "", holdout),
     salary_adding = salary * 0.1,
     ext_adding = ifelse(salary_adding < 5, 5, salary_adding),
     salary_next_season = dplyr::case_when(
       contract_years > 1 & holdout == 1 ~ round(top_player_salary / 2, 2),
-      contract_years > 1 & (holdout == 0 | is.na(holdout)) ~ round(salary + salary_adding, 2),
+      contract_years > 1 & holdout != 1 ~ round(salary + salary_adding, 2),
       contract_years <= 1 ~ 0
     ),
-    salary_ext = ifelse(contract_years > 1, round(salary + ext_adding, 2), 0),
+    salary_ext = dplyr::case_when(
+      (contract_years > 1 | roster_status == "TAXI_SQUAD" | grepl("BB", drafted) | drafted == "FCFS") & holdout == 1 ~ round(top_player_salary / 2, 2),
+      (contract_years > 1 | roster_status == "TAXI_SQUAD" | grepl("BB", drafted) | drafted == "FCFS") & holdout != 1 ~ round(salary + ext_adding, 2),
+      (contract_years <= 1 | roster_status != "TAXI_SQUAD") ~ 0
+    ),
     cut = round(salary * 0.25 * contract_years, 2),
-    category = ifelse(contract_years <= 1, "FA", "EXT")
+    gft = ifelse(gft > salary * 1.2, gft, round(salary * 1.2, 2)),
+    dplyr::across(dplyr::starts_with("tender"), ~ ifelse(. > salary * 1.1, ., round(salary * 1.1, 2)))
   ) %>%
-  dplyr::select(-dplyr::ends_with("_adding"))
+  dplyr::group_by(pos) %>%
+  f_create_ranks(desc(salary), "salary_rank") %>%
+  f_create_ranks(desc(salary_next_season), "salary_next_season_rank") %>%
+  f_create_ranks(desc(salary_ext), "salary_ext_rank") %>%
+  f_create_ranks(desc(cut), "cut_rank") %>%
+  dplyr::ungroup() %>%
+  #filter(franchise_id == "0006") %>%
+  #filter(player_name == "Woods, Jelani") %>%
+  dplyr::select(franchise_id, franchise_name, player_name, pos, team, category, points, pos_rank_ytd, contract_years, salary, holdout, salary_next_season, salary_ext, cut, gft, dplyr::ends_with("_rank"), dplyr::starts_with("tender"), fa_class, roster_status)

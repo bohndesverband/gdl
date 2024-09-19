@@ -28,6 +28,14 @@ runtime: shiny
 .shiny-html-output:has(#player-salaries.active) .form-group:has(> #selectPosition) {
   display: block;
 }
+
+#section-roster-salary #section-row-2 {
+  flex: 0 0 calc(100vh - 62px) !important;
+}
+
+#section-roster-salary .chart-stage {
+  overflow-y: auto;
+}
 ```
 
 ```{r setup, include=FALSE}
@@ -55,8 +63,6 @@ color_green <- "#16a085"
 ```{r inputs, echo=FALSE, message=FALSE, warning=FALSE}
 
 shiny::sliderInput("selectYear", "Jahre", min = current_season, max = current_season + 4, value = c(current_season, current_season + 1), step = 1, sep = "")
-
-#sliderInput("selectPosition", "Position", min = 1, max = 7, value = c(1, 7), sep = "")
 
 shinyWidgets::pickerInput(
   "selectTeams",
@@ -130,11 +136,11 @@ gt::render_gt({
 ```
 
 
-# Salary Vorschau {data-navmenu="Roster"}
+# Roster Salary {data-navmenu="Roster"}
 ## Row
-### Salary Vorschau
+### Roster Salary
 
-```{r player-salary-outlook, echo=FALSE, fig.height=30, message=FALSE, warning=FALSE}
+```{r roster-salary, echo=FALSE, fig.height=10, message=FALSE, warning=FALSE}
 
 source("R/players/position-ranks.R")
 source("R/players/player-salaries.R")
@@ -143,17 +149,25 @@ gt::render_gt({
   salary_outlook %>%
     dplyr::filter(
       franchise_id == input$selectSingleTeam,
-      (contract_years >= input$selectContractYears[1] & contract_years <= input$selectContractYears[2])
+      (contract_years >= input$selectContractYears[1] & contract_years <= input$selectContractYears[2]),
+      pos %in% input$selectPositions
     ) %>% 
     dplyr::group_by(category) %>%
     dplyr::arrange(dplyr::desc(points)) %>%
-    dplyr::select(player_name, pos, team, points, pos_rank_ytd, contract_years, category, salary, holdout, salary_next_season, salary_ext, cut) %>%
     dplyr::mutate(
+      player_info = paste(pos, team, sep = ", "),
+      player_info = ifelse(roster_status == "TAXI_SQUAD", paste(emoji::emoji("hatched_chick"), player_info), player_info),
       holdout = ifelse(holdout == 1, emoji::emoji("red_circle"), ""),
-      holdout = ifelse(is.na(holdout), "", holdout)
+      pos_rank_ytd = paste0("YTD #", pos_rank_ytd)
     ) %>%
-    gt::gt() %>%
+    dplyr::select(-dplyr::starts_with("franchise"), -pos, -team, -fa_class, -roster_status) %>% 
+    gt::gt(rowname_col = "player_name") %>%
+    gtExtras::gt_merge_stack(col1 = player_name, col2 = player_info) %>%
     gtExtras::gt_merge_stack(col1 = points, col2 = pos_rank_ytd) %>%
+    gtExtras::gt_merge_stack(col1 = salary, col2 = salary_rank) %>%
+    gtExtras::gt_merge_stack(col1 = salary_next_season, col2 = salary_next_season_rank) %>%
+    gtExtras::gt_merge_stack(col1 = salary_ext, col2 = salary_ext_rank) %>%
+    gtExtras::gt_merge_stack(col1 = cut, col2 = cut_rank) %>%
     gt::tab_spanner(
       "Kosten",
       c(salary_next_season, salary_ext, cut)
@@ -162,21 +176,77 @@ gt::render_gt({
       "Vertrag",
       c(contract_years, salary)
     ) %>%
+    gt::tab_spanner(
+      "Tags/Tender",
+      c(gft, dplyr::starts_with("tender"))
+    ) %>%
+    tab_style(
+      style = cell_text(align = "center"),
+      locations = cells_column_labels()
+    ) %>% 
     gt::cols_merge(c(player_name, holdout)) %>%
+    gt::grand_summary_rows(
+      c(salary, salary_next_season),
+      fns = list(
+       id =  "Cap Space",
+        fn = ~ 1000 - sum(., na.rm = TRUE)
+      ),
+      missing_text = ""
+    ) %>% 
     gt::cols_label(
-      player_name = "Spieler",
-      pos = "Pos",
-      team = "Team",
+      player_name = "",
       points = "PPG",
       contract_years = emoji::emoji("clock5"),
       salary = emoji::emoji("money_bag"),
       salary_next_season = nflreadr::get_current_season(TRUE) + 1,
       salary_ext = emoji::emoji("handshake"),
-      cut = emoji::emoji("scissors")
+      cut = emoji::emoji("scissors"),
+      gft = "GFT",
+      tender_1 = emoji::emoji("one"),
+      tender_2 = emoji::emoji("two"),
+      tender_3 = emoji::emoji("three")
     )
 })
 
 ```
+
+# Salary Vorschau {data-navmenu="Roster"}
+## Row
+### Salary Vorschau
+
+```{r roster-salary-preview, echo=FALSE, fig.height=9, message=FALSE, warning=FALSE}
+
+source("R/players/position-ranks.R")
+source("R/players/player-salaries.R")
+
+DT::renderDT({
+  formattable::formattable(
+    salary_outlook %>%
+      dplyr::mutate(
+        salary = dplyr::case_when(
+          roster_status == "INJURED_RESERVE" ~ round(salary * 0.75, 2),
+          roster_status == "TAXI_SQUAD" ~ round(salary * 0.25),
+          TRUE ~ salary
+        )
+      ) %>% 
+      dplyr::group_by(franchise_name) %>% 
+      dplyr::summarise(
+        "Cap Space" = 1000 - sum(salary),
+        "nächste Saison" = 1000 - sum(salary_next_season)
+      ),
+    list(
+      "Cap Space" = formattable::color_tile(color_red, color_green),
+      "nächste Saison" = formattable::color_tile(color_red,color_green)
+    )
+  ) %>% 
+    formattable::as.datatable(escape = FALSE, rownames = FALSE, options = list(dom = "t", pageLength = 16, order = list(2, 'asc')))
+})
+
+# TODO: IR + TS Status in berechnung einbeziehen
+
+```
+
+> Im Moment wird das TS und die IR zu 100% in die Berechnung einbezogen. Salary Adjustments werden nicht berücksichtigt.
 
 # Spielergehälter {data-navmenu="Spieler"}
 ## Row

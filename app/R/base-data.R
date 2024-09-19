@@ -14,4 +14,8 @@ scores_avg <- ffscrapr::ff_playerscores(mfl, current_season, "AVG")
 scores_ytd <- ffscrapr::ff_playerscores(mfl, current_season, "YTD")
 
 # helper ----
-
+f_create_ranks <- function(df, arrange_by, rank_col_name) {
+  df %>%
+    dplyr::arrange({{arrange_by}}) %>%
+    dplyr::mutate({{rank_col_name}} := paste0("#", row_number()))
+}
