@@ -56,6 +56,31 @@ source("R/base-data.R")
 
 color_red <- "#c0392b"
 color_green <- "#16a085"
+
+gtDefaults <- function(df) {
+  df %>%
+    gt::tab_options(
+      table.font.size = gt::px(14),
+      table.font.color = "#222f3e",
+      table.border.top.color = "white",
+      heading.border.bottom.color = "white",
+      heading.title.font.size = gt::px(40),
+      heading.title.font.weight = "light",
+      heading.subtitle.font.size = gt::px(16),
+
+      column_labels.font.weight = "bold",
+      column_labels.padding = gt::px(10),
+      column_labels.padding.horizontal = gt::px(15),
+      table_body.border.bottom.color = "#c8d6e5",
+      column_labels.border.top.color = "white",
+      stub.border.color = "#c8d6e5",
+      column_labels.border.bottom.color = "#222f3e",
+
+      #footnotes.padding = gt::px(100),
+      footnotes.padding.horizontal = gt::px(35),
+      footnotes.border.bottom.color = "#222f3e"
+    )
+}
 ```
 
 # Sidebar {.sidebar}
@@ -157,13 +182,18 @@ gt::render_gt({
     dplyr::mutate(
       player_info = paste(pos, team, sep = ", "),
       player_info = ifelse(roster_status == "TAXI_SQUAD", paste(emoji::emoji("hatched_chick"), player_info), player_info),
-      holdout = ifelse(holdout == 1, emoji::emoji("red_circle"), ""),
+      holdout = dplyr::case_when(
+        holdout == 1 ~ emoji::emoji("orange_circle"),
+        holdout == 2 ~ emoji::emoji("red_circle"),
+        TRUE ~ ""
+      ),
       pos_rank_ytd = paste0("YTD #", pos_rank_ytd)
     ) %>%
     dplyr::select(-dplyr::starts_with("franchise"), -pos, -team, -fa_class, -roster_status) %>% 
     gt::gt(rowname_col = "player_name") %>%
     gtExtras::gt_merge_stack(col1 = player_name, col2 = player_info) %>%
     gtExtras::gt_merge_stack(col1 = points, col2 = pos_rank_ytd) %>%
+    gtExtras::gt_merge_stack(col1 = contract_years, col2 = contractStatus) %>%
     gtExtras::gt_merge_stack(col1 = salary, col2 = salary_rank) %>%
     gtExtras::gt_merge_stack(col1 = salary_next_season, col2 = salary_next_season_rank) %>%
     gtExtras::gt_merge_stack(col1 = salary_ext, col2 = salary_ext_rank) %>%
@@ -174,7 +204,7 @@ gt::render_gt({
     ) %>%
     gt::tab_spanner(
       "Vertrag",
-      c(contract_years, salary)
+      c(contract_years, salary, salary_pct)
     ) %>%
     gt::tab_spanner(
       "Tags/Tender",
@@ -198,14 +228,16 @@ gt::render_gt({
       points = "PPG",
       contract_years = emoji::emoji("clock5"),
       salary = emoji::emoji("money_bag"),
-      salary_next_season = nflreadr::get_current_season(TRUE) + 1,
+      salary_pct = emoji::emoji("cake"),
+      salary_next_season = emoji::emoji("fast_forward"),
       salary_ext = emoji::emoji("handshake"),
       cut = emoji::emoji("scissors"),
-      gft = "GFT",
+      gft = emoji::emoji("lock"),
       tender_1 = emoji::emoji("one"),
       tender_2 = emoji::emoji("two"),
       tender_3 = emoji::emoji("three")
-    )
+    ) %>% 
+    gtDefaults()
 })
 
 ```
@@ -247,6 +279,47 @@ DT::renderDT({
     )
   ) %>% 
     formattable::as.datatable(escape = FALSE, rownames = FALSE, options = list(dom = "t", pageLength = 16, order = list(2, 'asc')))
+})
+
+```
+
+# Starting Lineups {data-navmenu="Roster"}
+## Row
+### Starting Lineups
+
+```{r starting-lineups, echo=FALSE, fig.height=9, message=FALSE, warning=FALSE}
+
+source("R/players/position-ranks.R")
+source("R/roster/starting-lineups.R")
+
+DT::renderDT({
+  formattable::formattable(
+    starting_lineups %>% 
+      dplyr::filter(
+        franchise_id %in% input$selectTeams,
+        pos %in% input$selectPositions
+      ) %>% 
+      dplyr::select(franchise_name:team, starts, points, pos_rank_ytd, contract_years, salary) %>% 
+      dplyr::rename(
+        "GDL Team" = franchise_name,
+        Spieler = player_name,
+        Pos = pos,
+        Team = team,
+        Starts = starts,
+        FPts = points,
+        "YTD Rang" = pos_rank_ytd,
+        Vertrag = contract_years,
+        Gehalt = salary
+      ),
+    list(
+      Starts = formattable::color_tile(color_red, color_green),
+      FPts = formattable::color_tile(color_red, color_green),
+      "YTD Rang" = formattable::color_tile(color_green, color_red),
+      Vertrag = formattable::color_tile(color_red, color_green),
+      Gehalt = formattable::color_tile(color_green, color_red)
+    )
+  ) %>% 
+    formattable::as.datatable(escape = FALSE, rownames = FALSE, options = list(pageLength = 16, order = list(5, 'asc')))
 })
 
 ```
