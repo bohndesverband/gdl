@@ -224,9 +224,14 @@ DT::renderDT({
     salary_outlook %>%
       dplyr::mutate(
         salary = dplyr::case_when(
-          roster_status == "INJURED_RESERVE" ~ round(salary * 0.75, 2),
+          roster_status == "INJURED_RESERVE" ~ round(salary * 0.5, 2),
           roster_status == "TAXI_SQUAD" ~ round(salary * 0.25),
           TRUE ~ salary
+        ),
+        salary_next_season = ifelse(
+          roster_status == "TAXI_SQUAD" & contract_years > 1,
+          round(salary * 0.25),
+          salary
         )
       ) %>% 
       dplyr::group_by(franchise_name) %>% 
