@@ -214,6 +214,8 @@ gt::render_gt({
 ## Row
 ### Salary Vorschau
 
+> Salary Adjustments werden nicht berücksichtigt
+
 ```{r roster-salary-preview, echo=FALSE, fig.height=9, message=FALSE, warning=FALSE}
 
 source("R/players/position-ranks.R")
@@ -247,11 +249,7 @@ DT::renderDT({
     formattable::as.datatable(escape = FALSE, rownames = FALSE, options = list(dom = "t", pageLength = 16, order = list(2, 'asc')))
 })
 
-# TODO: IR + TS Status in berechnung einbeziehen
-
 ```
-
-> Im Moment wird das TS und die IR zu 100% in die Berechnung einbezogen. Salary Adjustments werden nicht berücksichtigt.
 
 # Spielergehälter {data-navmenu="Spieler"}
 ## Row
