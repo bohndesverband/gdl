@@ -87,7 +87,7 @@ salary_outlook <- roster_with_salary %>%
     by = "pos"
   ) %>%
   dplyr::mutate(
-    category = ifelse(contract_years > 1 | roster_status == "TAXI_SQUAD" | grepl("BB", drafted) | drafted == "FCFS", "Mögliche Vertragsverlängerungen", "Auslaufende Verträge"),
+    category = ifelse(contract_years >= 1 | roster_status == "TAXI_SQUAD" | grepl("BB", drafted) | drafted == "FCFS", "Mögliche Vertragsverlängerungen", "Auslaufende Verträge"),
     fa_class = nflreadr::get_current_season() + contract_years,
     salary_pct = formattable::percent(salary / 1000, digits = 0),
     holdout = dplyr::case_when(
@@ -102,18 +102,19 @@ salary_outlook <- roster_with_salary %>%
       contract_years > 1 & holdout == 1 ~ round(top_player_salary / 2, 2),
       contract_years > 1 & holdout == 2 ~ top_player_salary,
       contract_years > 1 & holdout != 1 & holdout != 2 ~ round(salary + salary_adding, 2),
-      contract_years <= 1 ~ 0
+      contract_years <= 1 ~ NA
     ),
     salary_ext = dplyr::case_when(
       (contract_years > 1 | roster_status == "TAXI_SQUAD" | grepl("BB", drafted) | drafted == "FCFS") & holdout == 1 ~ round(top_player_salary / 2, 2),
       (contract_years > 1 | roster_status == "TAXI_SQUAD" | grepl("BB", drafted) | drafted == "FCFS") & holdout == 2 ~ top_player_salary,
-      (contract_years > 1 | roster_status == "TAXI_SQUAD" | grepl("BB", drafted) | drafted == "FCFS") & holdout != 1 & holdout != 2 ~ round(salary + ext_adding, 2),
-      (contract_years <= 1 | roster_status != "TAXI_SQUAD") ~ 0
+      contract_years == 0 & current_week == 22 ~ NA,
+      (contract_years > 1 | roster_status == "TAXI_SQUAD" | grepl("BB", drafted) | drafted == "FCFS") & holdout != 1 & holdout != 2 | (contract_years == 1 & current_week == 22) ~ round(salary + ext_adding, 2),
+      (contract_years < 1 | roster_status != "TAXI_SQUAD") ~ NA
     ),
     cut = round(salary * 0.25 * contract_years, 2),
     gft = ifelse(gft > salary * 1.2, gft, round(salary * 1.2, 2)),
     dplyr::across(dplyr::starts_with("tender"), ~ ifelse(. > salary * 1.1, ., round(salary * 1.1, 2))),
-    dplyr::across(dplyr::starts_with("tender"), ~ ifelse(grepl("T", contractStatus), 0, .)),
+    dplyr::across(dplyr::starts_with("tender"), ~ ifelse(grepl("T", contractStatus), NA, .)),
   ) %>%
   dplyr::group_by(pos) %>%
   f_create_ranks(desc(salary), "salary_rank") %>%
@@ -122,5 +123,5 @@ salary_outlook <- roster_with_salary %>%
   f_create_ranks(desc(cut), "cut_rank") %>%
   dplyr::ungroup() %>%
   #filter(franchise_id == "0006") %>%
-  #filter(player_name == "Woods, Jelani") %>%
+  #filter(player_name == "Hutchinson, Aidan") %>%
   dplyr::select(franchise_id, franchise_name, player_name, pos, team, category, points, pos_rank_ytd, contract_years, contractStatus, salary, salary_pct, holdout, salary_next_season, salary_ext, cut, gft, dplyr::ends_with("_rank"), dplyr::starts_with("tender"), fa_class, roster_status)

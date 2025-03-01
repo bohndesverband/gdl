@@ -6,20 +6,20 @@ league_id <- 74675
 positions <- c("QB", "RB", "WR", "TE", "PK", "DT", "DE", "LB", "CB", "S")
 
 # data ----
-mfl <- ffscrapr::mfl_connect(current_season, league_id)
-mfl_last_season <- ffscrapr::mfl_connect(current_season - 1, league_id)
+mfl <- ffscrapr::mfl_connect(current_season, league_id, rate_limit = FALSE)
+mfl_last_season <- ffscrapr::mfl_connect(current_season - 1, league_id, rate_limit = FALSE)
 
 franchises <- ffscrapr::ff_franchises(mfl)
 rosters <- ffscrapr::ff_rosters(mfl)
 
 if ((current_year == current_season & current_week > 17) | current_week < 2) {
   standing <- ffscrapr::ff_standings(mfl_last_season)
-  starter <- ffscrapr::ff_starters(mfl_last_season)
+  starter <- readr::read_csv(paste0("https://github.com/bohndesverband/gdl/releases/download/starter_data/gdl_starter_", current_season - 1, ".csv"), col_types = "ccdicidccc")
   scores_avg <- ffscrapr::ff_playerscores(mfl_last_season, current_season - 1, "AVG")
   scores_ytd <- ffscrapr::ff_playerscores(mfl_last_season, current_season - 1, "YTD")
 } else {
   standing <- ffscrapr::ff_standings(mfl)
-  starter <- ffscrapr::ff_starters(mfl)
+  starter <- readr::read_csv(paste0("https://github.com/bohndesverband/gdl/releases/download/starter_data/gdl_starter_", current_season, ".csv"), col_types = "ccdicidccc")
   scores_avg <- ffscrapr::f(mfl, current_season, "AVG")
   scores_ytd <- ffscrapr::ff_playerscores(mfl, current_season, "YTD")
 }

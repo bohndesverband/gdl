@@ -1,11 +1,11 @@
 name: gdl1
-title: gdl1
+title: gdl
 username: jakesch
 account: jakesch
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 12752432
-bundleId: 9123391
+bundleId: 9875598
 url: https://jakesch.shinyapps.io/gdl1/
 version: 1
 asMultiple: FALSE

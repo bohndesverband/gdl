@@ -114,7 +114,7 @@ shinyWidgets::pickerInput(
   multiple = TRUE
 )
 
-shiny::sliderInput("selectContractYears", "Vertragsjahre", min = 1, max = 4, value = c(1, 4), step = 1, sep = "")
+shiny::sliderInput("selectContractYears", "Vertragsjahre", min = -1, max = 4, value = c(-1, 4), step = 1, sep = "")
 
 ```
 
@@ -178,7 +178,7 @@ gt::render_gt({
       pos %in% input$selectPositions
     ) %>% 
     dplyr::group_by(category) %>%
-    dplyr::arrange(dplyr::desc(points)) %>%
+    dplyr::arrange(contract_years, dplyr::desc(points)) %>%
     dplyr::mutate(
       player_info = paste(pos, team, sep = ", "),
       player_info = ifelse(roster_status == "TAXI_SQUAD", paste(emoji::emoji("hatched_chick"), player_info), player_info),
